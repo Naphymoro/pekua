@@ -1,0 +1,21 @@
+groups:
+  - name: pekua-production
+    rules:
+      - alert: PekuaApiUnavailable
+        expr: up{job="pekua-api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Pekua API is unavailable
+      - alert: PekuaHighErrorRate
+        expr: sum(rate(http_server_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_total[5m])), 1) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 5 percent of API requests are failing
+      - alert: PekuaConnectorFailureBurst
+        expr: sum by (connector) (increase(pekua_connector_requests_total{outcome="error"}[15m])) > 10
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Connector is repeatedly failing and should be circuit-broken

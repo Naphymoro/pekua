@@ -1,0 +1,21 @@
+# Release checklist
+
+- [ ] Unit, integration, migration, security, and end-to-end suites pass
+- [ ] Dependency lock and container scan show no unaccepted critical findings
+- [ ] Secret scan is clean and client artifacts contain no secrets
+- [ ] Database backup and restore were exercised for this release line
+- [ ] Evidence ledger integrity test passes
+- [ ] Graph claims without accepted evidence equal zero
+- [ ] Tenant-isolation tests pass
+- [ ] Disabled connectors make zero network requests
+- [ ] Rate limits, `Retry-After`, backoff, and circuit breakers are tested
+- [ ] Schema drift quarantines the connector
+- [ ] Preprint versions remain distinct
+- [ ] Patent family fixtures produce expected relationships
+- [ ] Restricted files cannot be downloaded without authorisation
+- [ ] Coverage report includes inaccessible sources and unresolved gaps
+- [ ] Health, readiness, metrics, traces, and alerts work in staging
+- [ ] Migration and rollback plan reviewed
+- [ ] `alembic upgrade head --sql` and the release-range downgrade SQL render successfully
+- [ ] `docker compose config --quiet` succeeds with validation-only secrets
+- [ ] Image digest, migration revision, and connector-manifest versions recorded

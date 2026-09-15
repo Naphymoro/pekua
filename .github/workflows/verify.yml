@@ -1,0 +1,71 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pekua_test
+          POSTGRES_USER: pekua
+          POSTGRES_PASSWORD: test-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pekua -d pekua_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      PEKUA_ENVIRONMENT: test
+      PEKUA_DATABASE_URL: postgresql+asyncpg://pekua:test-only-password@localhost:5432/pekua_test
+      PEKUA_OBJECT_STORE_ENDPOINT: http://127.0.0.1:9000
+      PEKUA_OBJECT_STORE_ACCESS_KEY: test-only
+      PEKUA_OBJECT_STORE_SECRET_KEY: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,extract]" pip-audit
+      - run: ruff check src tests
+      - run: mypy src/pekua
+      - run: alembic upgrade head
+      - run: pytest --cov=pekua --cov-report=term-missing --cov-fail-under=75
+      - run: pip-audit
+
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      POSTGRES_PASSWORD: compose-validation-only
+      MINIO_ROOT_USER: compose-validation-only
+      MINIO_ROOT_PASSWORD: compose-validation-only
+      NEO4J_PASSWORD: compose-validation-only
+    steps:
+      - uses: actions/checkout@v4
+      - run: touch .env
+      - run: docker compose config --quiet
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag pekua:${{ github.sha }} .
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: pekua:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
+          ignore-unfixed: true
