@@ -46,6 +46,9 @@ pekua-mcp = "pekua.mcp.server:run"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pekua"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/pekua/ui/index.html" = "pekua/ui/index.html"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

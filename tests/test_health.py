@@ -9,6 +9,12 @@ def test_liveness() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_workspace_ui_is_served_at_root() -> None:
+    response = TestClient(create_app()).get("/")
+    assert response.status_code == 200
+    assert "Ask across science and patents" in response.text
+
+
 def test_connector_status_requires_tenant_and_keeps_restricted_sources_disabled() -> None:
     client = TestClient(create_app())
     assert client.get("/api/v1/connectors").status_code == 422

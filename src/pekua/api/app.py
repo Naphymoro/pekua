@@ -1,8 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Header
+from fastapi.responses import FileResponse
 
 from pekua import __version__
 from pekua.config import get_settings
@@ -32,6 +34,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(jobs_router)
+
+    @app.get("/", include_in_schema=False)
+    async def workspace() -> FileResponse:
+        return FileResponse(Path(__file__).parents[1] / "ui" / "index.html")
 
     @app.get("/health/live", tags=["system"])
     async def liveness() -> dict[str, str]:
