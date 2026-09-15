@@ -26,6 +26,17 @@ class ConnectorState(StrEnum):
     QUARANTINED = "QUARANTINED"
 
 
+class ActivationState(StrEnum):
+    """The concrete action required before a connector can run."""
+
+    READY = "READY"
+    CODE_PENDING = "CODE_PENDING"
+    CREDENTIAL_MISSING = "CREDENTIAL_MISSING"
+    AGREEMENT_REQUIRED = "AGREEMENT_REQUIRED"
+    ENDPOINT_UNVERIFIED = "ENDPOINT_UNVERIFIED"
+    CONFIGURATION_REQUIRED = "CONFIGURATION_REQUIRED"
+
+
 EXECUTABLE_ACCESS = frozenset({AccessClass.PUBLIC_API, AccessClass.OPEN_REPOSITORY})
 
 
@@ -47,6 +58,9 @@ class ConnectorManifest(BaseModel):
     rate_limit_per_second: float = 1.0
     reason: str | None = None
     last_verified: str | None = None
+    activation_state: ActivationState = ActivationState.READY
+    capabilities: tuple[str, ...] = ("discovery",)
+    activation_action: str | None = None
 
     @property
     def can_execute(self) -> bool:

@@ -62,6 +62,9 @@ def create_app() -> FastAPI:
                 "full_text": item.full_text,
                 "reason": item.reason,
                 "documentation_url": item.documentation_url,
+                "activation_state": item.activation_state.value,
+                "activation_action": item.activation_action,
+                "capabilities": list(item.capabilities),
             }
             for item in default_registry().status()
         ]

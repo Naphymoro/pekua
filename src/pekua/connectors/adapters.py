@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from html import unescape
 from typing import Any
+from urllib.parse import quote
 
 from defusedxml import ElementTree  # type: ignore[import-untyped]
 
@@ -260,3 +261,140 @@ class ArxivConnector(Connector):
             )
         next_cursor = str(start + len(records)) if len(records) == min(query.limit, 100) else None
         return SearchPage(records=tuple(records), next_cursor=next_cursor)
+
+
+class DoajConnector(Connector):
+    """Search open-access journal records through DOAJ's documented API."""
+
+    manifest = SOURCES["doaj"]
+
+    async def search(self, query: Query) -> SearchPage:
+        self.assert_permitted()
+        page = int(query.cursor or "1")
+        data = await self.context.transport.get_json(
+            self.url(
+                f"search/articles/{quote(query.text, safe='')}",
+                {"page": page, "pageSize": min(query.limit, 100)},
+            ),
+            headers=self.headers(),
+        )
+        items = data.get("results")
+        if not isinstance(items, list):
+            raise SchemaDrift("DOAJ response missing results")
+        records = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            bibjson = item.get("bibjson") or {}
+            identifiers = {
+                str(identifier.get("type")): str(identifier.get("id"))
+                for identifier in bibjson.get("identifier", [])
+                if isinstance(identifier, dict) and identifier.get("type") and identifier.get("id")
+            }
+            doi = identifiers.get("doi")
+            links = [link for link in bibjson.get("link", []) if isinstance(link, dict)]
+            full_text = next(
+                (
+                    _text(link.get("url"))
+                    for link in links
+                    if str(link.get("type", "")).lower() in {"fulltext", "pdf"}
+                ),
+                None,
+            )
+            license_items = bibjson.get("license") or []
+            license_name = next(
+                (
+                    _text(license_item.get("type"))
+                    for license_item in license_items
+                    if isinstance(license_item, dict)
+                ),
+                None,
+            )
+            records.append(
+                SourceRecord.now(
+                    source_id="doaj",
+                    source_record_id=str(item.get("id") or doi or ""),
+                    title=str(bibjson.get("title") or "Untitled"),
+                    record_url=str(
+                        next((_text(link.get("url")) for link in links), None)
+                        or (f"https://doi.org/{doi}" if doi else "https://doaj.org/")
+                    ),
+                    identifiers=identifiers,
+                    authors=tuple(
+                        str(author.get("name"))
+                        for author in bibjson.get("author", [])
+                        if isinstance(author, dict) and author.get("name")
+                    ),
+                    abstract=_text(bibjson.get("abstract")),
+                    published_at=_text(bibjson.get("year")),
+                    license=license_name,
+                    full_text_url=full_text if license_name else None,
+                    raw=item,
+                )
+            )
+        total = data.get("total")
+        has_more = isinstance(total, int) and page * min(query.limit, 100) < total
+        return SearchPage(records=tuple(records), next_cursor=str(page + 1) if has_more else None)
+
+
+class ZenodoConnector(Connector):
+    """Search Zenodo records while preserving item-level file licences."""
+
+    manifest = SOURCES["zenodo"]
+
+    async def search(self, query: Query) -> SearchPage:
+        self.assert_permitted()
+        page = int(query.cursor or "1")
+        size = min(query.limit, 100)
+        data = await self.context.transport.get_json(
+            self.url("api/records", {"q": query.text, "size": size, "page": page}),
+            headers=self.headers(),
+        )
+        hits = data.get("hits") or {}
+        items = hits.get("hits")
+        if not isinstance(items, list):
+            raise SchemaDrift("Zenodo response missing hits.hits")
+        records = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            metadata = item.get("metadata") or {}
+            doi = _text(metadata.get("doi")) or _text(item.get("doi"))
+            links = item.get("links") or {}
+            files = [file for file in item.get("files", []) if isinstance(file, dict)]
+            downloadable = next(
+                (
+                    _text((file.get("links") or {}).get("self"))
+                    for file in files
+                    if (file.get("links") or {}).get("self")
+                ),
+                None,
+            )
+            licence = metadata.get("license")
+            if isinstance(licence, dict):
+                licence = licence.get("id") or licence.get("title")
+            records.append(
+                SourceRecord.now(
+                    source_id="zenodo",
+                    source_record_id=str(item.get("id") or doi or ""),
+                    title=str(metadata.get("title") or "Untitled"),
+                    record_url=str(links.get("html") or (f"https://doi.org/{doi}" if doi else "")),
+                    identifiers={"doi": doi} if doi else {},
+                    authors=tuple(
+                        str(creator.get("name"))
+                        for creator in metadata.get("creators", [])
+                        if isinstance(creator, dict) and creator.get("name")
+                    ),
+                    abstract=_text(metadata.get("description")),
+                    published_at=_text(metadata.get("publication_date")),
+                    version=_text(metadata.get("version")),
+                    license=_text(licence),
+                    full_text_url=downloadable if licence else None,
+                    raw=item,
+                )
+            )
+        total = hits.get("total")
+        if isinstance(total, dict):
+            total = total.get("value")
+        has_more = isinstance(total, int) and page * size < total
+        return SearchPage(records=tuple(records), next_cursor=str(page + 1) if has_more else None)

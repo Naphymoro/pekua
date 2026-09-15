@@ -1,10 +1,18 @@
 """Lawful, provenance-preserving data connectors for Pekua."""
 
 from .base import Connector, ConnectorContext, ConnectorRegistry
-from .models import AccessClass, ConnectorManifest, ConnectorState, SearchPage, SourceRecord
+from .models import (
+    AccessClass,
+    ActivationState,
+    ConnectorManifest,
+    ConnectorState,
+    SearchPage,
+    SourceRecord,
+)
 
 __all__ = [
     "AccessClass",
+    "ActivationState",
     "Connector",
     "ConnectorContext",
     "ConnectorManifest",

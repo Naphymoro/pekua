@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import AccessClass, ConnectorManifest, ConnectorState
+from .models import AccessClass, ActivationState, ConnectorManifest, ConnectorState
 
 
 def _source(
@@ -95,6 +95,8 @@ SOURCES = {
         authentication="oauth2",
         credential_secret="EPO_OPS_CREDENTIALS",  # noqa: S106 - vault key name, not a secret
         reason="EPO OPS credentials are not configured",
+        activation_state=ActivationState.CREDENTIAL_MISSING,
+        activation_action="Register an EPO OPS application and add its OAuth credentials",
     ),
     "wipo_patentscope": _source(
         "wipo_patentscope",
@@ -105,6 +107,8 @@ SOURCES = {
         None,
         "https://patentscope.wipo.int/",
         reason="A documented WIPO machine-access agreement is required",
+        activation_state=ActivationState.AGREEMENT_REQUIRED,
+        activation_action="Record an approved WIPO machine-access agreement",
     ),
     "lens": _source(
         "lens",
@@ -117,6 +121,8 @@ SOURCES = {
         authentication="bearer",
         credential_secret="LENS_API_TOKEN",  # noqa: S106 - vault key name, not a secret
         reason="Lens API licence and token are not configured",
+        activation_state=ActivationState.CREDENTIAL_MISSING,
+        activation_action="Add an approved Lens API token to the credential vault",
     ),
     "aripo": _source(
         "aripo",
@@ -127,6 +133,8 @@ SOURCES = {
         None,
         "https://www.aripo.org/",
         reason="Documented machine access or a data-sharing partnership is required",
+        activation_state=ActivationState.AGREEMENT_REQUIRED,
+        activation_action="Record the approved machine-access route or partnership",
     ),
     "oapi": _source(
         "oapi",
@@ -137,6 +145,8 @@ SOURCES = {
         None,
         "https://oapi.int/",
         reason="Documented machine access or a data-sharing partnership is required",
+        activation_state=ActivationState.AGREEMENT_REQUIRED,
+        activation_action="Record the approved machine-access route or partnership",
     ),
     "cipc": _source(
         "cipc",
@@ -147,6 +157,8 @@ SOURCES = {
         None,
         "https://www.cipc.co.za/",
         reason="Documented machine access or a data-sharing partnership is required",
+        activation_state=ActivationState.AGREEMENT_REQUIRED,
+        activation_action="Record the approved machine-access route or partnership",
     ),
     "ajol": _source(
         "ajol",
@@ -157,6 +169,8 @@ SOURCES = {
         None,
         "https://www.ajol.info/",
         reason="An official feed, API, OAI-PMH endpoint or partnership is required",
+        activation_state=ActivationState.AGREEMENT_REQUIRED,
+        activation_action="Configure an AJOL-approved feed, API or OAI-PMH endpoint",
     ),
     "africarxiv": _source(
         "africarxiv",
@@ -167,6 +181,8 @@ SOURCES = {
         None,
         "https://info.africarxiv.org/",
         reason="Repository endpoints must be mapped and verified before activation",
+        activation_state=ActivationState.ENDPOINT_UNVERIFIED,
+        activation_action="Map AfricArXiv repositories to their documented upstream APIs",
     ),
 }
 
@@ -184,15 +200,31 @@ for source_id, name, owner, docs in (
     ("medrxiv", "medRxiv", "Cold Spring Harbor Laboratory", "https://api.biorxiv.org/"),
     ("osf_preprints", "OSF Preprints", "Center for Open Science", "https://developer.osf.io/"),
 ):
+    implemented = source_id in {"doaj", "zenodo"}
     SOURCES[source_id] = _source(
         source_id,
         name,
         owner,
         AccessClass.PUBLIC_API,
-        ConnectorState.DISABLED,
-        None,
+        ConnectorState.ENABLED if implemented else ConnectorState.DISABLED,
+        {
+            "doaj": "https://doaj.org/api",
+            "zenodo": "https://zenodo.org",
+        }.get(source_id),
         docs,
-        reason="Documented adapter is declared but not yet implemented and verified",
+        formats=("json",),
+        full_text=source_id in {"doaj", "zenodo"},
+        reason=(
+            None
+            if implemented
+            else "Documented adapter is declared but not yet implemented and verified"
+        ),
+        activation_state=ActivationState.READY if implemented else ActivationState.CODE_PENDING,
+        activation_action=(
+            None
+            if implemented
+            else "Implement and contract-test the documented API adapter"
+        ),
     )
 
 for source_id, name, owner, access, docs, reason in (
@@ -230,4 +262,14 @@ for source_id, name, owner, access, docs, reason in (
         None,
         docs,
         reason=reason,
+        activation_state=(
+            ActivationState.CONFIGURATION_REQUIRED
+            if source_id in {"uspto", "google_patents"}
+            else ActivationState.ENDPOINT_UNVERIFIED
+        ),
+        activation_action=(
+            "Select and configure an official patent data product"
+            if source_id in {"uspto", "google_patents"}
+            else "Verify a documented machine endpoint and item-level licences"
+        ),
     )
