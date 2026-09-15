@@ -13,6 +13,8 @@ def test_workspace_ui_is_served_at_root() -> None:
     response = TestClient(create_app()).get("/")
     assert response.status_code == 200
     assert "Ask across science and patents" in response.text
+    assert 'class="nav-button active" data-view="synthesis"' in response.text
+    assert "function activateView" in response.text
 
 
 def test_connector_status_requires_tenant_and_keeps_restricted_sources_disabled() -> None:
